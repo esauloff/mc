@@ -191,6 +191,11 @@ mc_search_free (mc_search_t * lc_mc_search)
     if (lc_mc_search->conditions != NULL)
         mc_search__conditions_free (lc_mc_search->conditions);
 
+    if (lc_mc_search->conditions_exclude != NULL)
+    {
+        mc_search__conditions_free (lc_mc_search->conditions_exclude);
+    }
+
 #ifdef SEARCH_TYPE_GLIB
     if (lc_mc_search->regex_match_info != NULL)
         g_match_info_free (lc_mc_search->regex_match_info);
@@ -208,6 +213,38 @@ mc_search_free (mc_search_t * lc_mc_search)
 
 gboolean
 mc_search_prepare (mc_search_t * lc_mc_search)
+{
+    gboolean ret;
+
+    const gchar * exclusion_delim = "|";
+    gchar ** tokens;
+
+    ret = TRUE;
+
+    if (lc_mc_search != NULL && lc_mc_search->search_type == MC_SEARCH_T_GLOB) {
+        tokens = g_strsplit (lc_mc_search->original, exclusion_delim, 0);
+        if (g_strv_length (tokens) == 2)
+        {
+            g_free (lc_mc_search->original);
+
+            lc_mc_search->original_len = strlen (tokens[0]);
+            lc_mc_search->original = g_strndup (tokens[0], lc_mc_search->original_len);
+
+            lc_mc_search->original_exclude_len = strlen (tokens[1]);
+            lc_mc_search->original_exclude = g_strndup (tokens[1], lc_mc_search->original_exclude_len);
+        }
+        g_strfreev (tokens);
+
+        ret = mc_search_prepare_exclude (lc_mc_search);
+    }
+
+    return (ret && mc_search_prepare_include (lc_mc_search));
+}
+
+/* --------------------------------------------------------------------------------------------- */
+
+gboolean
+mc_search_prepare_include (mc_search_t * lc_mc_search)
 {
     GPtrArray *ret;
 
@@ -257,6 +294,63 @@ mc_search_prepare (mc_search_t * lc_mc_search)
                                                  str_detect_termencoding ()));
 #endif
     lc_mc_search->conditions = ret;
+
+    return (lc_mc_search->error == MC_SEARCH_E_OK);
+}
+
+/* --------------------------------------------------------------------------------------------- */
+
+gboolean
+mc_search_prepare_exclude (mc_search_t * lc_mc_search)
+{
+    GPtrArray *ret;
+
+    ret = g_ptr_array_new ();
+#ifdef HAVE_CHARSET
+    if (lc_mc_search->is_all_charsets)
+    {
+        gsize loop1;
+
+        for (loop1 = 0; loop1 < codepages->len; loop1++)
+        {
+            const char *id;
+            gsize recoded_str_len;
+            gchar *buffer;
+
+            id = ((codepage_desc *) g_ptr_array_index (codepages, loop1))->id;
+            if (g_ascii_strcasecmp (id, lc_mc_search->original_charset) == 0)
+            {
+                g_ptr_array_add (ret,
+                                 mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original_exclude,
+                                                             lc_mc_search->original_exclude_len,
+                                                             lc_mc_search->original_charset));
+                continue;
+            }
+
+            buffer =
+                mc_search__recode_str (lc_mc_search->original_exclude, lc_mc_search->original_exclude_len,
+                                       lc_mc_search->original_charset, id, &recoded_str_len);
+
+            g_ptr_array_add (ret,
+                             mc_search__cond_struct_new (lc_mc_search, buffer,
+                                                         recoded_str_len, id));
+            g_free (buffer);
+        }
+    }
+    else
+    {
+        g_ptr_array_add (ret,
+                         mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original_exclude,
+                                                     lc_mc_search->original_exclude_len,
+                                                     lc_mc_search->original_charset));
+    }
+#else
+    g_ptr_array_add (ret,
+                     mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original_exclude,
+                                                 lc_mc_search->original_exclude_len,
+                                                 str_detect_termencoding ()));
+#endif
+    lc_mc_search->conditions_exclude = ret;
 
     return (lc_mc_search->error == MC_SEARCH_E_OK);
 }

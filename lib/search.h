@@ -110,9 +110,17 @@ typedef struct mc_search_struct
     /* prepared conditions */
     GPtrArray *conditions;
 
+    /* prepared conditions: to exclude patterns for MC_SEARCH_T_GLOB type */
+    GPtrArray *conditions_exclude;
+
     /* original search string */
     gchar *original;
     gsize original_len;
+
+    /* original search string: to exclude patterns for MC_SEARCH_T_GLOB type */
+    gchar *original_exclude;
+    gsize original_exclude_len;
+
 #ifdef HAVE_CHARSET
     gchar *original_charset;
 #endif
@@ -146,6 +154,8 @@ mc_search_t *mc_search_new_len (const gchar * original, gsize original_len,
 void mc_search_free (mc_search_t * lc_mc_search);
 
 gboolean mc_search_prepare (mc_search_t * mc_search);
+gboolean mc_search_prepare_include (mc_search_t * mc_search);
+gboolean mc_search_prepare_exclude (mc_search_t * mc_search);
 
 gboolean mc_search_run (mc_search_t * mc_search, const void *user_data, gsize start_search,
                         gsize end_search, gsize * found_len);
