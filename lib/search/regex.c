@@ -329,7 +329,8 @@ mc_search__regex_found_cond_one (mc_search_t * lc_mc_search, mc_search_regex_t *
         (regex, search_str->str, search_str->len, 0, G_REGEX_MATCH_NEWLINE_ANY,
          &lc_mc_search->regex_match_info, &mcerror))
     {
-        if (!do_not_cleanup) {
+        if (!do_not_cleanup)
+        {
             g_match_info_free (lc_mc_search->regex_match_info);
             lc_mc_search->regex_match_info = NULL;
         }
@@ -397,7 +398,8 @@ mc_search__regex_found_cond_exclude (mc_search_t * lc_mc_search, GString * searc
         mc_search_cond_t *mc_search_cond;
         mc_search__found_cond_t ret;
 
-        mc_search_cond = (mc_search_cond_t *) g_ptr_array_index (lc_mc_search->conditions_exclude, loop1);
+        mc_search_cond =
+            (mc_search_cond_t *) g_ptr_array_index (lc_mc_search->conditions_exclude, loop1);
 
         if (!mc_search_cond->regex_handle)
         {
@@ -988,11 +990,13 @@ mc_search__run_regex (mc_search_t * lc_mc_search, const void *user_data,
             virtual_pos = current_pos;
         }
 
-        ret_combined = mc_search__regex_found_cond_include (lc_mc_search, lc_mc_search->regex_buffer);
+        ret_combined =
+            mc_search__regex_found_cond_include (lc_mc_search, lc_mc_search->regex_buffer);
         if (ret_combined == COND__FOUND_OK)
         {
-            if ( lc_mc_search->search_type == MC_SEARCH_T_GLOB &&
-                    mc_search__regex_found_cond_exclude (lc_mc_search, lc_mc_search->regex_buffer) == COND__FOUND_OK )
+            if (lc_mc_search->search_type == MC_SEARCH_T_GLOB &&
+                mc_search__regex_found_cond_exclude (lc_mc_search,
+                                                     lc_mc_search->regex_buffer) == COND__FOUND_OK)
             {
                 ret_combined = COND__NOT_ALL_FOUND;
             }

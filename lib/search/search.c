@@ -216,12 +216,13 @@ mc_search_prepare (mc_search_t * lc_mc_search)
 {
     gboolean ret;
 
-    const gchar * exclusion_delim = "|";
-    gchar ** tokens;
+    const gchar *exclusion_delim = "|";
+    gchar **tokens;
 
     ret = TRUE;
 
-    if (lc_mc_search != NULL && lc_mc_search->search_type == MC_SEARCH_T_GLOB) {
+    if (lc_mc_search != NULL && lc_mc_search->search_type == MC_SEARCH_T_GLOB)
+    {
         tokens = g_strsplit (lc_mc_search->original, exclusion_delim, 0);
         if (g_strv_length (tokens) == 2)
         {
@@ -231,7 +232,8 @@ mc_search_prepare (mc_search_t * lc_mc_search)
             lc_mc_search->original = g_strndup (tokens[0], lc_mc_search->original_len);
 
             lc_mc_search->original_exclude_len = strlen (tokens[1]);
-            lc_mc_search->original_exclude = g_strndup (tokens[1], lc_mc_search->original_exclude_len);
+            lc_mc_search->original_exclude =
+                g_strndup (tokens[1], lc_mc_search->original_exclude_len);
         }
         g_strfreev (tokens);
 
@@ -321,14 +323,16 @@ mc_search_prepare_exclude (mc_search_t * lc_mc_search)
             if (g_ascii_strcasecmp (id, lc_mc_search->original_charset) == 0)
             {
                 g_ptr_array_add (ret,
-                                 mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original_exclude,
+                                 mc_search__cond_struct_new (lc_mc_search,
+                                                             lc_mc_search->original_exclude,
                                                              lc_mc_search->original_exclude_len,
                                                              lc_mc_search->original_charset));
                 continue;
             }
 
             buffer =
-                mc_search__recode_str (lc_mc_search->original_exclude, lc_mc_search->original_exclude_len,
+                mc_search__recode_str (lc_mc_search->original_exclude,
+                                       lc_mc_search->original_exclude_len,
                                        lc_mc_search->original_charset, id, &recoded_str_len);
 
             g_ptr_array_add (ret,
