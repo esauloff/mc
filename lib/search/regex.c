@@ -318,6 +318,12 @@ mc_search__g_regex_match_full_safe (const GRegex * regex,
 
 /* --------------------------------------------------------------------------------------------- */
 
+/*
+ * Argument do_not_cleanup is used to distinguish *_include() vs *_exclude() calls to avoid
+ * clean-up of lc_mc_search->regex_match_info structure: if file does not match *_include() call,
+ * it is not considered anymore, but if file does not match *_exclude() call, it still can be 
+ * considered and regex_match_info is used later in mc_search__run_regex().
+ */
 static mc_search__found_cond_t
 mc_search__regex_found_cond_one (mc_search_t * lc_mc_search, mc_search_regex_t * regex,
                                  GString * search_str, gboolean do_not_cleanup)
@@ -362,6 +368,11 @@ mc_search__regex_found_cond_one (mc_search_t * lc_mc_search, mc_search_regex_t *
 
 /* --------------------------------------------------------------------------------------------- */
 
+/*
+ * To distinguish this method and newly added mc_search__regex_found_cond_exclude() - method was
+ * renamed, original name is mc_search__regex_found_cond(). No changes done to method internal
+ * logic except for added argument in mc_search__regex_found_cond_one() call.
+ */
 static mc_search__found_cond_t
 mc_search__regex_found_cond_include (mc_search_t * lc_mc_search, GString * search_str)
 {
@@ -388,6 +399,13 @@ mc_search__regex_found_cond_include (mc_search_t * lc_mc_search, GString * searc
 
 /* --------------------------------------------------------------------------------------------- */
 
+/*
+ * This method logic reflects mc_search__regex_found_cond_include() internals except for using
+ * exclusion array lc_mc_search->conditions_exclude to check if considered file matches exclusion
+ * pattern and should not be included in search result.
+ * TRUE is passed to mc_search__regex_found_cond_one() call to not clean-up
+ * lc_mc_search->regex_match_info structure if file does not match exclusion pattern.
+ */
 static mc_search__found_cond_t
 mc_search__regex_found_cond_exclude (mc_search_t * lc_mc_search, GString * search_str)
 {
@@ -925,6 +943,7 @@ mc_search__run_regex (mc_search_t * lc_mc_search, const void *user_data,
     gint start_pos;
     gint end_pos;
 
+    /* Variable will contain result of *_include() method and then *_exclude() if needed */
     mc_search__found_cond_t ret_combined;
 
     if (lc_mc_search->regex_buffer != NULL)
@@ -990,6 +1009,13 @@ mc_search__run_regex (mc_search_t * lc_mc_search, const void *user_data,
             virtual_pos = current_pos;
         }
 
+        /*
+         * Check file exclusion for MC_SEARCH_T_GLOB search type.
+         * Each considered file is checked to match inclusion pattern first.
+         * If file matches and COND__FOUND_OK is returned from *_include() method, then exclusion
+         * is checked with *_exclude(). If file matches for exclusion, found status COND__FOUND_OK
+         * is changed to COND__NOT_ALL_FOUND to avoid file from search results.
+         */
         ret_combined =
             mc_search__regex_found_cond_include (lc_mc_search, lc_mc_search->regex_buffer);
         if (ret_combined == COND__FOUND_OK)

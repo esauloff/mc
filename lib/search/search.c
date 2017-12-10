@@ -211,11 +211,16 @@ mc_search_free (mc_search_t * lc_mc_search)
 
 /* --------------------------------------------------------------------------------------------- */
 
+/*
+ * Wrapper method to cover both mc_search_prepare_include() and mc_search_prepare_exclude() calls.
+ * Exclude portion works only for MC_SEARCH_T_GLOB search type.
+ */
 gboolean
 mc_search_prepare (mc_search_t * lc_mc_search)
 {
     gboolean ret;
 
+    /* Hardcoded delimiter to split lc_mc_search->original to inclusion and exclusion patterns */
     const gchar *exclusion_delim = "|";
     gchar **tokens;
 
@@ -224,6 +229,12 @@ mc_search_prepare (mc_search_t * lc_mc_search)
     if (lc_mc_search != NULL && lc_mc_search->search_type == MC_SEARCH_T_GLOB)
     {
         tokens = g_strsplit (lc_mc_search->original, exclusion_delim, 0);
+
+        /*
+         * Only if two tokens (only one delimiter '|' was specified) are found,
+         * lc_mc_search->original string is splitted, freed, and then initialized again.
+         * lc_mc_search->original_exclude is initialized afterwards.
+         */
         if (g_strv_length (tokens) == 2)
         {
             g_free (lc_mc_search->original);
@@ -245,6 +256,10 @@ mc_search_prepare (mc_search_t * lc_mc_search)
 
 /* --------------------------------------------------------------------------------------------- */
 
+/*
+ * To distinguish this method and newly added mc_search_prepare_exclude() - method was renamed,
+ * original name is mc_search_prepare(). No changes done to method internal logic.
+ */
 gboolean
 mc_search_prepare_include (mc_search_t * lc_mc_search)
 {
@@ -302,6 +317,10 @@ mc_search_prepare_include (mc_search_t * lc_mc_search)
 
 /* --------------------------------------------------------------------------------------------- */
 
+/*
+ * This method logic reflects mc_search_prepare_include() internals except for using
+ * exclusion pattern lc_mc_search->original_exclude to fill array lc_mc_search->conditions_exclude.
+ */
 gboolean
 mc_search_prepare_exclude (mc_search_t * lc_mc_search)
 {
