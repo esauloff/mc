@@ -123,6 +123,19 @@ mc_search__conditions_free (GPtrArray * array)
 }
 
 /* --------------------------------------------------------------------------------------------- */
+
+static gboolean
+mc_search_is_character_escaped (gchar * string, gchar ** string_start)
+{
+    if (string == NULL || &string == string_start || *(string - 1) != '\\')
+    {
+        return FALSE;
+    }
+
+    return !mc_search_is_character_escaped (string - 1, string_start);
+}
+
+/* --------------------------------------------------------------------------------------------- */
 /*** public functions ****************************************************************************/
 /* --------------------------------------------------------------------------------------------- */
 /* Init search descriptor.
@@ -222,12 +235,19 @@ mc_search_prepare (mc_search_t * lc_mc_search)
 
     /* Hardcoded delimiter to split lc_mc_search->original to inclusion and exclusion patterns */
     const gchar *exclusion_delim = "|";
+    gboolean is_exclusion_escaped;
     gchar **tokens;
 
     ret = TRUE;
 
     if (lc_mc_search != NULL && lc_mc_search->search_type == MC_SEARCH_T_GLOB)
     {
+        is_exclusion_escaped =
+            mc_search_is_character_escaped (g_strstr_len (lc_mc_search->original,
+                                                          lc_mc_search->original_len,
+                                                          exclusion_delim),
+                                            &lc_mc_search->original);
+
         tokens = g_strsplit (lc_mc_search->original, exclusion_delim, 0);
 
         /*
@@ -235,7 +255,7 @@ mc_search_prepare (mc_search_t * lc_mc_search)
          * lc_mc_search->original string is splitted, freed, and then initialized again.
          * lc_mc_search->original_exclude is initialized afterwards.
          */
-        if (g_strv_length (tokens) == 2)
+        if ((g_strv_length (tokens) == 2) && !is_exclusion_escaped)
         {
             g_free (lc_mc_search->original);
 
