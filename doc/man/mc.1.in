@@ -1418,7 +1418,13 @@ figure.
 The "File name" input field contains a filename pattern to be searched
 for. It is interpreted as a shell pattern or as a regular expression
 depending on the state of the "Using shell patterns" checkbox. An empty
-value is valid and matches any file name.
+value is valid and matches any file name. To exclude some files or
+filename patterns from search results when using shell patterns,
+delimiter '|' (pipe symbol) can be used to split "File name" string
+into inclusion and exclusion parts. If more than one '|' symbol is found,
+exclusion logic does not apply. To screen delimiter sign and search for
+'|' symbol literally, escape it with single '\\' (backslash symbol)
+like so "\\|".
 .PP
 The "Content" input field contains a string to search for within the
 files. Leave this field empty to disable searching file contents.
@@ -2754,7 +2760,7 @@ inside inodes and thus don't waste much disk space).
 
 .\"NODE "Select/Unselect Files"
 .SH "Select/Unselect Files"
-The dialog of group of files and directories selection or uselection.
+The dialog of group of files and directories selection or unselection.
 The
 .\"LINK2"
 input line
@@ -2779,7 +2785,13 @@ expressions (see ed (1)). When
 checkbox is on, the selection will be case sensitive characters.
 If
 .I Case sensitive
-is off, the case will be ignored.
+is off, the case will be ignored. To exclude some files or
+filename patterns from selection/unselection results when using
+Shell patterns, delimiter '|' (pipe symbol) can be used to split
+search string into inclusion and exclusion parts. If more than
+one '|' symbol is found, exclusion logic does not apply. To screen
+delimiter sign and search for '|' symbol literally, escape it
+with single '\\' (backslash symbol) like so "\\|".
 .\"NODE "Diff Viewer"
 .SH "Internal Diff Viewer"
 The mcdiff is a visual diff tool. You can compare two files and edit them
