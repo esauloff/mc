@@ -115,6 +115,139 @@ mc_search__cond_struct_free (mc_search_cond_t * mc_search_cond)
 
 /* --------------------------------------------------------------------------------------------- */
 
+/**
+ * Initializes inclusion search criteria.
+ * Parses inclusion search criteria to regular expression and adds it to lc_mc_search->conditions.
+ * 
+ * @param lc_mc_search search criteria
+ * 
+ * @return TRUE if inclusion search criteria is initialized successfully, FALSE otherwise
+ */
+static gboolean
+mc_search_prepare_include (mc_search_t * lc_mc_search)
+{
+    GPtrArray *ret;
+
+    ret = g_ptr_array_new ();
+#ifdef HAVE_CHARSET
+    if (lc_mc_search->is_all_charsets)
+    {
+        gsize loop1;
+
+        for (loop1 = 0; loop1 < codepages->len; loop1++)
+        {
+            const char *id;
+            gsize recoded_str_len;
+            gchar *buffer;
+
+            id = ((codepage_desc *) g_ptr_array_index (codepages, loop1))->id;
+            if (g_ascii_strcasecmp (id, lc_mc_search->original_charset) == 0)
+            {
+                g_ptr_array_add (ret,
+                                 mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original,
+                                                             lc_mc_search->original_len,
+                                                             lc_mc_search->original_charset));
+                continue;
+            }
+
+            buffer =
+                mc_search__recode_str (lc_mc_search->original, lc_mc_search->original_len,
+                                       lc_mc_search->original_charset, id, &recoded_str_len);
+
+            g_ptr_array_add (ret,
+                             mc_search__cond_struct_new (lc_mc_search, buffer,
+                                                         recoded_str_len, id));
+            g_free (buffer);
+        }
+    }
+    else
+    {
+        g_ptr_array_add (ret,
+                         mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original,
+                                                     lc_mc_search->original_len,
+                                                     lc_mc_search->original_charset));
+    }
+#else
+    g_ptr_array_add (ret,
+                     mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original,
+                                                 lc_mc_search->original_len,
+                                                 str_detect_termencoding ()));
+#endif
+    lc_mc_search->conditions = ret;
+
+    return (lc_mc_search->error == MC_SEARCH_E_OK);
+}
+
+/* --------------------------------------------------------------------------------------------- */
+
+/**
+ * Initializes exclusion search criteria.
+ * Parses exclusion search criteria to regular expression and adds it
+ * to lc_mc_search->conditions_exclude.
+ * 
+ * @param lc_mc_search search criteria
+ * 
+ * @return TRUE if exclusion search criteria is initialized successfully, FALSE otherwise
+ */
+static gboolean
+mc_search_prepare_exclude (mc_search_t * lc_mc_search)
+{
+    GPtrArray *ret;
+
+    ret = g_ptr_array_new ();
+#ifdef HAVE_CHARSET
+    if (lc_mc_search->is_all_charsets)
+    {
+        gsize loop1;
+
+        for (loop1 = 0; loop1 < codepages->len; loop1++)
+        {
+            const char *id;
+            gsize recoded_str_len;
+            gchar *buffer;
+
+            id = ((codepage_desc *) g_ptr_array_index (codepages, loop1))->id;
+            if (g_ascii_strcasecmp (id, lc_mc_search->original_charset) == 0)
+            {
+                g_ptr_array_add (ret,
+                                 mc_search__cond_struct_new (lc_mc_search,
+                                                             lc_mc_search->original_exclude,
+                                                             lc_mc_search->original_exclude_len,
+                                                             lc_mc_search->original_charset));
+                continue;
+            }
+
+            buffer =
+                mc_search__recode_str (lc_mc_search->original_exclude,
+                                       lc_mc_search->original_exclude_len,
+                                       lc_mc_search->original_charset, id, &recoded_str_len);
+
+            g_ptr_array_add (ret,
+                             mc_search__cond_struct_new (lc_mc_search, buffer,
+                                                         recoded_str_len, id));
+            g_free (buffer);
+        }
+    }
+    else
+    {
+        g_ptr_array_add (ret,
+                         mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original_exclude,
+                                                     lc_mc_search->original_exclude_len,
+                                                     lc_mc_search->original_charset));
+    }
+#else
+    g_ptr_array_add (ret,
+                     mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original_exclude,
+                                                 lc_mc_search->original_exclude_len,
+                                                 str_detect_termencoding ()));
+#endif
+    lc_mc_search->conditions_exclude = ret;
+
+    return (lc_mc_search->error == MC_SEARCH_E_OK);
+}
+
+/* --------------------------------------------------------------------------------------------- */
+
 static void
 mc_search__conditions_free (GPtrArray * array)
 {
@@ -124,6 +257,18 @@ mc_search__conditions_free (GPtrArray * array)
 
 /* --------------------------------------------------------------------------------------------- */
 
+/**
+ * Checks whether specified character with #string parameter is escaped properly with '\' symbol.
+ * 
+ * @example for string "abc\|def" where character '|' is escaped with single '\', TRUE is returned;
+ *          for string "abc\\|def" - character '|' is not escaped while preceding '\' is,
+ *          FALSE is returned.
+ * 
+ * @param string fisrt character in string which is checked for preceding escape chars
+ * @param string_start start address of full string containing #string
+ * 
+ * @return TRUE if character in #string is escaped properly, FALSE otherwise
+ */
 static gboolean
 mc_search_is_character_escaped (gchar * string, gchar ** string_start)
 {
@@ -224,16 +369,23 @@ mc_search_free (mc_search_t * lc_mc_search)
 
 /* --------------------------------------------------------------------------------------------- */
 
-/*
- * Wrapper method to cover both mc_search_prepare_include() and mc_search_prepare_exclude() calls.
- * Exclude portion works only for MC_SEARCH_T_GLOB search type.
+/**
+ * Covers mc_search_prepare_include() and mc_search_prepare_exclude() calls.
+ * Wrapper method which covers *_include() and *_exclude() calls, and exclude logic works
+ * for MC_SEARCH_T_GLOB only.
+ * Splits original search criteria only in case single delimiter character exists in
+ * criteria string and character is not escaped.
+ * 
+ * @param lc_mc_search search criteria
+ * 
+ * @return TRUE if inclusion and exclusion criterias are initialized successfully, FALSE otherwise
  */
 gboolean
 mc_search_prepare (mc_search_t * lc_mc_search)
 {
     gboolean ret;
 
-    /* Hardcoded delimiter to split lc_mc_search->original to inclusion and exclusion patterns */
+    /* Hardcoded delimiter to split lc_mc_search->original into inclusion and exclusion parts */
     const gchar *exclusion_delim = "|";
     gboolean is_exclusion_escaped;
     gchar **tokens;
@@ -242,6 +394,7 @@ mc_search_prepare (mc_search_t * lc_mc_search)
 
     if (lc_mc_search != NULL && lc_mc_search->search_type == MC_SEARCH_T_GLOB)
     {
+        /* Check if #exclusion_delim is escaped with '\' symbol */
         is_exclusion_escaped =
             mc_search_is_character_escaped (g_strstr_len (lc_mc_search->original,
                                                           lc_mc_search->original_len,
@@ -251,7 +404,7 @@ mc_search_prepare (mc_search_t * lc_mc_search)
         tokens = g_strsplit (lc_mc_search->original, exclusion_delim, 0);
 
         /*
-         * Only if two tokens (only one delimiter '|' was specified) are found,
+         * If two tokens (one delimiter '|' is specified) are found and delimiter is not escaped,
          * lc_mc_search->original string is splitted, freed, and then initialized again.
          * lc_mc_search->original_exclude is initialized afterwards.
          */
@@ -272,130 +425,6 @@ mc_search_prepare (mc_search_t * lc_mc_search)
     }
 
     return (ret && mc_search_prepare_include (lc_mc_search));
-}
-
-/* --------------------------------------------------------------------------------------------- */
-
-/*
- * To distinguish this method and newly added mc_search_prepare_exclude() - method was renamed,
- * original name is mc_search_prepare(). No changes done to method internal logic.
- */
-gboolean
-mc_search_prepare_include (mc_search_t * lc_mc_search)
-{
-    GPtrArray *ret;
-
-    ret = g_ptr_array_new ();
-#ifdef HAVE_CHARSET
-    if (lc_mc_search->is_all_charsets)
-    {
-        gsize loop1;
-
-        for (loop1 = 0; loop1 < codepages->len; loop1++)
-        {
-            const char *id;
-            gsize recoded_str_len;
-            gchar *buffer;
-
-            id = ((codepage_desc *) g_ptr_array_index (codepages, loop1))->id;
-            if (g_ascii_strcasecmp (id, lc_mc_search->original_charset) == 0)
-            {
-                g_ptr_array_add (ret,
-                                 mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original,
-                                                             lc_mc_search->original_len,
-                                                             lc_mc_search->original_charset));
-                continue;
-            }
-
-            buffer =
-                mc_search__recode_str (lc_mc_search->original, lc_mc_search->original_len,
-                                       lc_mc_search->original_charset, id, &recoded_str_len);
-
-            g_ptr_array_add (ret,
-                             mc_search__cond_struct_new (lc_mc_search, buffer,
-                                                         recoded_str_len, id));
-            g_free (buffer);
-        }
-    }
-    else
-    {
-        g_ptr_array_add (ret,
-                         mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original,
-                                                     lc_mc_search->original_len,
-                                                     lc_mc_search->original_charset));
-    }
-#else
-    g_ptr_array_add (ret,
-                     mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original,
-                                                 lc_mc_search->original_len,
-                                                 str_detect_termencoding ()));
-#endif
-    lc_mc_search->conditions = ret;
-
-    return (lc_mc_search->error == MC_SEARCH_E_OK);
-}
-
-/* --------------------------------------------------------------------------------------------- */
-
-/*
- * This method logic reflects mc_search_prepare_include() internals except for using
- * exclusion pattern lc_mc_search->original_exclude to fill array lc_mc_search->conditions_exclude.
- */
-gboolean
-mc_search_prepare_exclude (mc_search_t * lc_mc_search)
-{
-    GPtrArray *ret;
-
-    ret = g_ptr_array_new ();
-#ifdef HAVE_CHARSET
-    if (lc_mc_search->is_all_charsets)
-    {
-        gsize loop1;
-
-        for (loop1 = 0; loop1 < codepages->len; loop1++)
-        {
-            const char *id;
-            gsize recoded_str_len;
-            gchar *buffer;
-
-            id = ((codepage_desc *) g_ptr_array_index (codepages, loop1))->id;
-            if (g_ascii_strcasecmp (id, lc_mc_search->original_charset) == 0)
-            {
-                g_ptr_array_add (ret,
-                                 mc_search__cond_struct_new (lc_mc_search,
-                                                             lc_mc_search->original_exclude,
-                                                             lc_mc_search->original_exclude_len,
-                                                             lc_mc_search->original_charset));
-                continue;
-            }
-
-            buffer =
-                mc_search__recode_str (lc_mc_search->original_exclude,
-                                       lc_mc_search->original_exclude_len,
-                                       lc_mc_search->original_charset, id, &recoded_str_len);
-
-            g_ptr_array_add (ret,
-                             mc_search__cond_struct_new (lc_mc_search, buffer,
-                                                         recoded_str_len, id));
-            g_free (buffer);
-        }
-    }
-    else
-    {
-        g_ptr_array_add (ret,
-                         mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original_exclude,
-                                                     lc_mc_search->original_exclude_len,
-                                                     lc_mc_search->original_charset));
-    }
-#else
-    g_ptr_array_add (ret,
-                     mc_search__cond_struct_new (lc_mc_search, lc_mc_search->original_exclude,
-                                                 lc_mc_search->original_exclude_len,
-                                                 str_detect_termencoding ()));
-#endif
-    lc_mc_search->conditions_exclude = ret;
-
-    return (lc_mc_search->error == MC_SEARCH_E_OK);
 }
 
 /* --------------------------------------------------------------------------------------------- */
